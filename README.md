@@ -1,5 +1,7 @@
 # @sabbour/adaptive-ui-google-maps-pack
 
+[![CI](https://github.com/sabbour/adaptive-ui-google-maps-pack/actions/workflows/ci.yml/badge.svg)](https://github.com/sabbour/adaptive-ui-google-maps-pack/actions/workflows/ci.yml)
+
 An [Adaptive UI](https://github.com/sabbour/adaptive-ui-framework) component pack for **Google Maps** and **Google Places** integration. Embeds interactive maps, place search, nearby discovery with photos, and destination photo cards.
 
 ## Components
