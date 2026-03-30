@@ -1,6 +1,6 @@
 {
   "name": "@sabbour/adaptive-ui-google-maps-pack",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
@@ -9,7 +9,10 @@
     ".": "./src/index.ts",
     "./settings": "./src/GoogleMapsSettings.tsx"
   },
-  "files": ["src", "dist"],
+  "files": [
+    "src",
+    "dist"
+  ],
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
     "main": "src/index.ts",
@@ -30,7 +33,7 @@
     "prepublishOnly": "tsc -b"
   },
   "peerDependencies": {
-    "@sabbour/adaptive-ui-core": "^1.0.0",
+    "@sabbour/adaptive-ui-core": "^1.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
