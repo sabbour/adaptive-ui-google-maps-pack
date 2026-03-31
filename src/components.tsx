@@ -267,7 +267,7 @@ export function GoogleNearby({ node }: AdaptiveComponentProps<GoogleNearbyNode>)
   const [results, setResults] = useState<Array<{
     name: string; address: string; placeId: string;
     rating?: number; totalRatings?: number; priceLevel?: string;
-    photoRef?: string; types?: string[];
+    photoRef?: string; photoBlobUrl?: string; types?: string[];
   }>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -299,7 +299,7 @@ export function GoogleNearby({ node }: AdaptiveComponentProps<GoogleNearbyNode>)
         if (!res.ok) throw new Error(`Places API error: ${res.status}`);
         const data = await res.json();
         if (!cancelled) {
-          setResults((data.places ?? []).map((p: any) => ({
+          const places = (data.places ?? []).map((p: any) => ({
             name: p.displayName?.text ?? '',
             address: p.formattedAddress ?? '',
             placeId: p.id ?? '',
@@ -307,8 +307,26 @@ export function GoogleNearby({ node }: AdaptiveComponentProps<GoogleNearbyNode>)
             totalRatings: p.userRatingCount,
             priceLevel: p.priceLevel,
             photoRef: p.photos?.[0]?.name,
+            photoBlobUrl: undefined as string | undefined,
             types: p.types?.slice(0, 3),
-          })));
+          }));
+
+          // Fetch photo blobs in parallel
+          await Promise.all(places.map(async (place: any) => {
+            if (!place.photoRef || !apiKey || cancelled) return;
+            try {
+              const photoRes = await fetch(
+                `https://places.googleapis.com/v1/${place.photoRef}/media?maxHeightPx=200&maxWidthPx=300&key=${apiKey}`,
+                { headers: { 'Referer': window.location.origin } }
+              );
+              if (photoRes.ok && !cancelled) {
+                const blob = await photoRes.blob();
+                place.photoBlobUrl = URL.createObjectURL(blob);
+              }
+            } catch { /* skip photo */ }
+          }));
+
+          if (!cancelled) setResults(places);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Search failed');
@@ -317,7 +335,10 @@ export function GoogleNearby({ node }: AdaptiveComponentProps<GoogleNearbyNode>)
       }
     })();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      results.forEach((r) => { if (r.photoBlobUrl) URL.revokeObjectURL(r.photoBlobUrl); });
+    };
   }, [apiKey, location, node.placeType]);
 
   if (!apiKey) {
@@ -370,9 +391,7 @@ export function GoogleNearby({ node }: AdaptiveComponentProps<GoogleNearbyNode>)
         },
           ...results.map((place) => {
             const isSelected = (state[node.bind] as string) === place.name;
-            const photoUrl = place.photoRef && apiKey
-              ? `https://places.googleapis.com/v1/${place.photoRef}/media?maxHeightPx=200&maxWidthPx=300&key=${apiKey}`
-              : null;
+            const photoUrl = place.photoBlobUrl ?? null;
 
             return React.createElement('div', {
               key: place.placeId,
@@ -390,10 +409,13 @@ export function GoogleNearby({ node }: AdaptiveComponentProps<GoogleNearbyNode>)
               },
             },
               // Photo
-              photoUrl && React.createElement('div', {
+              photoUrl && React.createElement('img', {
+                src: photoUrl,
+                alt: place.name,
+                onError: (e: React.SyntheticEvent<HTMLImageElement>) => { (e.target as HTMLImageElement).style.display = 'none'; },
                 style: {
-                  height: '120px', backgroundImage: `url(${photoUrl})`,
-                  backgroundSize: 'cover', backgroundPosition: 'center',
+                  width: '100%', height: '120px',
+                  objectFit: 'cover', display: 'block',
                 } as React.CSSProperties,
               }),
               // Info
@@ -477,7 +499,16 @@ export function GooglePhotoCard({ node }: AdaptiveComponentProps<GooglePhotoCard
           });
           const photoRef = place.photos?.[0]?.name;
           if (photoRef) {
-            setPhotoUrl(`https://places.googleapis.com/v1/${photoRef}/media?maxHeightPx=600&maxWidthPx=800&key=${apiKey}`);
+            try {
+              const photoRes = await fetch(
+                `https://places.googleapis.com/v1/${photoRef}/media?maxHeightPx=600&maxWidthPx=800&key=${apiKey}`,
+                { headers: { 'Referer': window.location.origin } }
+              );
+              if (photoRes.ok) {
+                const blob = await photoRes.blob();
+                if (!cancelled) setPhotoUrl(URL.createObjectURL(blob));
+              }
+            } catch { /* photo load failed, fallback renders */ }
           }
         }
       } catch (err) {
@@ -489,6 +520,11 @@ export function GooglePhotoCard({ node }: AdaptiveComponentProps<GooglePhotoCard
 
     return () => { cancelled = true; };
   }, [apiKey, query]);
+
+  // Revoke blob URL on unmount or when photoUrl changes
+  useEffect(() => {
+    return () => { if (photoUrl) URL.revokeObjectURL(photoUrl); };
+  }, [photoUrl]);
 
   if (!apiKey) {
     return React.createElement(Banner, {
@@ -533,6 +569,7 @@ export function GooglePhotoCard({ node }: AdaptiveComponentProps<GooglePhotoCard
     React.createElement('img', {
       src: photoUrl,
       alt: placeInfo?.name ?? query,
+      onError: () => setPhotoUrl(null),
       style: {
         width: '100%', height: '100%',
         objectFit: 'cover', display: 'block',
